@@ -1,0 +1,2291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amsterdam Journey</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: 'Courier New', monospace;
+            touch-action: none;
+        }
+        
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #87CEEB;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+            font-weight: bold;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            z-index: 10;
+        }
+        
+        .control-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255,255,255,0.3);
+            border: 3px solid rgba(255,255,255,0.6);
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            touch-action: none;
+        }
+        
+        .control-btn:active {
+            background: rgba(255,255,255,0.5);
+        }
+        
+        @media (max-width: 768px) {
+            .control-btn {
+                display: flex;
+            }
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+        }
+        
+        #startScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #ff6b6b;
+        }
+        
+        #startScreen p {
+            font-size: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+            max-width: 600px;
+        }
+        
+        #startBtn {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        
+        #startBtn:hover {
+            background: #ff5252;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <h1>🌧️ Amsterdam Journey 🚲</h1>
+        <p>Help the character reach the arcade!<br>
+        Use ARROW keys or mobile buttons.<br>
+        Avoid obstacles and watch out for cyclists!</p>
+        <button id="startBtn">START GAME</button>
+    </div>
+    
+    <div id="hud">
+        <div>❤️ Lives: <span id="lives">3</span></div>
+        <div>⭐ Score: <span id="score">0</span></div>
+        <div>📍 Level: <span id="level">1</span> - <span id="levelName">Rainy Amsterdam</span></div>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="controls">
+        <button class="control-btn" id="leftBtn">◄</button>
+        <button class="control-btn" id="jumpBtn">▲</button>
+        <button class="control-btn" id="rightBtn">►</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = Math.min(window.innerWidth, 1200);
+            canvas.height = Math.min(window.innerHeight - 100, 600);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        let gameStarted = false;
+        let lives = 3;
+        let score = 0;
+        let currentLevel = 1;
+        const levelNames = [
+            "Rainy Amsterdam",
+            "Red Light District",
+            "Eetcafé Break",
+            "Bike Tunnel",
+            "Dutch Meadow",
+            "Arcade"
+        ];
+        
+        const keys = {};
+        let touchLeft = false;
+        let touchRight = false;
+        let touchJump = false;
+        
+        const playerImage = new Image();
+        playerImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGCSURBVFhH7ZbBSsNAEIb/bRIvCh48ePDgwYMHDx48ePDgwYMHDx48eBBBEEEQQRBBEEEQQRBBED3Ye/EBfAYfwmfwKXwNv8Xf8nUym2QbN9ukm7bQD35Iss3OfPvtzGxC/5dSSilVX+gAOoEu0Al0gU6gC3QCXR5d6AA6ga4/B3rABXAJ3AL3wCPwBLwAb8A78AF8Al/AN/ADfAO/wB/wD/wH/wMAQCKVStUjkclkahHI5/O1CMRyuVwNgkKhUINALJvN1iAQy2QyNQhEMplMDQKRdDpdg0Aklkqlahbi+XyuViGez+dqFYjFYrFahXg0Gq1VIMbjcfQvjEajvgKxwWDQVyAWi8V8BWKRSMRXIBKLRCJqFoJeL/6Xer2emoXIZDKpZiEQCoVUs+DxeDzULLjdbmoWXC4XNQsul4uaBafTSc2C0+mkZsHhcFCz4HA4qFlwOBzULNjtdmoWbDYbNQs2m42aBavVSs2CxWKhZsFsNlOzYDKZqFkwGo3ULOj1+r4C1Sy0WlVdvwFviXxTyZYAAAAASUVORK5CYII=';
+        
+        const player = {
+            x: 100,
+            y: 400,
+            width: 32,
+            height: 48,
+            velocityX: 0,
+            velocityY: 0,
+            speed: 5,
+            jumpPower: -12,
+            gravity: 0.5,
+            onGround: false,
+            direction: 1,
+            invincible: false,
+            invincibleTime: 0
+        };
+        
+        let platforms = [];
+        let obstacles = [];
+        let npcs = [];
+        let rain = [];
+        let checkpoints = [];
+        let coins = [];
+        let camera = { x: 0, y: 0 };
+        
+        function generateLevel(level) {
+            platforms = [];
+            obstacles = [];
+            npcs = [];
+            rain = [];
+            checkpoints = [];
+            coins = [];
+            
+            if(level === 2 || level === 3) {
+                for(let i = 0; i < 10; i++) {
+                    platforms.push({
+                        x: i * 50,
+                        y: canvas.height - 50,
+                        width: 50,
+                        height: 50,
+                        color: level === 3 ? '#8B4513' : '#555'
+                    });
+                }
+            } else {
+                for(let i = 0; i < 180; i++) {
+                    platforms.push({
+                        x: i * 50,
+                        y: canvas.height - 50,
+                        width: 50,
+                        height: 50,
+                        color: level === 3 ? '#8B4513' : '#555'
+                    });
+                }
+            }
+            
+            if(level === 1) {
+                for(let i = 0; i < 50; i++) {
+                    rain.push({
+                        x: Math.random() * 5000,
+                        y: Math.random() * canvas.height,
+                        speed: 5 + Math.random() * 3
+                    });
+                }
+                
+                platforms.push(
+                    {x: 250, y: 450, width: 100, height: 20, color: '#8B7355'},
+                    {x: 400, y: 380, width: 80, height: 20, color: '#A0826D'},
+                    {x: 550, y: 310, width: 90, height: 20, color: '#8B7355'},
+                    {x: 710, y: 360, width: 70, height: 20, color: '#A0826D'},
+                    {x: 850, y: 280, width: 100, height: 20, color: '#8B7355'},
+                    {x: 1020, y: 340, width: 85, height: 20, color: '#A0826D'},
+                    {x: 1180, y: 270, width: 95, height: 20, color: '#8B7355'},
+                    {x: 1350, y: 350, width: 80, height: 20, color: '#A0826D'},
+                    {x: 1500, y: 400, width: 110, height: 20, color: '#8B7355'},
+                    {x: 1680, y: 330, width: 90, height: 20, color: '#A0826D'},
+                    {x: 1850, y: 280, width: 85, height: 20, color: '#8B7355'},
+                    {x: 2020, y: 370, width: 95, height: 20, color: '#A0826D'},
+                    {x: 2200, y: 300, width: 80, height: 20, color: '#8B7355'},
+                    {x: 2350, y: 420, width: 100, height: 20, color: '#A0826D'},
+                    {x: 2520, y: 350, width: 90, height: 20, color: '#8B7355'}
+                );
+                
+                obstacles.push(
+                    {x: 350, y: canvas.height - 60, width: 70, height: 10, type: 'water'},
+                    {x: 500, y: canvas.height - 60, width: 85, height: 10, type: 'water'},
+                    {x: 780, y: canvas.height - 60, width: 95, height: 10, type: 'water'},
+                    {x: 950, y: canvas.height - 60, width: 80, height: 10, type: 'water'},
+                    {x: 1250, y: canvas.height - 60, width: 100, height: 10, type: 'water'},
+                    {x: 1450, y: canvas.height - 60, width: 75, height: 10, type: 'water'},
+                    {x: 1750, y: canvas.height - 60, width: 90, height: 10, type: 'water'},
+                    {x: 2000, y: canvas.height - 60, width: 85, height: 10, type: 'water'},
+                    {x: 2300, y: canvas.height - 60, width: 95, height: 10, type: 'water'},
+                    {x: 600, y: canvas.height - 100, width: 35, height: 35, type: 'bike', velocityX: -2.5, startX: 600},
+                    {x: 1100, y: canvas.height - 100, width: 35, height: 35, type: 'bike', velocityX: -3, startX: 1100},
+                    {x: 1600, y: canvas.height - 100, width: 35, height: 35, type: 'bike', velocityX: -2.8, startX: 1600},
+                    {x: 2100, y: canvas.height - 100, width: 35, height: 35, type: 'bike', velocityX: -3.2, startX: 2100}
+                );
+                
+                for(let i = 0; i < 25; i++) {
+                    coins.push({
+                        x: 300 + i * 100,
+                        y: 200 + Math.sin(i) * 100,
+                        width: 20,
+                        height: 20,
+                        collected: false,
+                        floatOffset: i * 0.5
+                    });
+                }
+                
+                checkpoints.push({x: 2700, y: canvas.height - 100, width: 50, height: 50, active: false});
+                
+            } else if(level === 2) {
+                platforms.push(
+                    {x: 220, y: 470, width: 85, height: 20, color: '#2d3436'},
+                    {x: 380, y: 410, width: 80, height: 20, color: '#34495e'},
+                    {x: 540, y: 360, width: 75, height: 20, color: '#2d3436'},
+                    {x: 700, y: 420, width: 90, height: 20, color: '#34495e'},
+                    {x: 870, y: 350, width: 80, height: 20, color: '#2d3436'},
+                    {x: 1030, y: 400, width: 85, height: 20, color: '#34495e'},
+                    {x: 1190, y: 340, width: 90, height: 20, color: '#2d3436'},
+                    {x: 1360, y: 390, width: 75, height: 20, color: '#34495e'},
+                    {x: 1520, y: 440, width: 95, height: 20, color: '#2d3436'},
+                    {x: 1690, y: 370, width: 80, height: 20, color: '#34495e'},
+                    {x: 1850, y: 320, width: 90, height: 20, color: '#2d3436'},
+                    {x: 2020, y: 380, width: 85, height: 20, color: '#34495e'}
+                );
+                
+                for(let i = 0; i < 22; i++) {
+                    coins.push({
+                        x: 270 + i * 85,
+                        y: 220 + Math.sin(i * 0.7) * 90,
+                        width: 20,
+                        height: 20,
+                        collected: false,
+                        floatOffset: i * 0.6
+                    });
+                }
+                
+                for(let i = 0; i < 10; i++) {
+                    platforms.push({
+                        x: 2100 + i * 50,
+                        y: canvas.height - 50,
+                        width: 50,
+                        height: 50,
+                        color: '#555'
+                    });
+                }
+                
+                checkpoints.push({x: 2200, y: canvas.height - 100, width: 50, height: 50, active: false});
+                
+            } else if(level === 3) {
+                platforms.push(
+                    {x: 200, y: 470, width: 120, height: 20, color: '#8B4513'},
+                    {x: 380, y: 420, width: 90, height: 20, color: '#A0522D'},
+                    {x: 540, y: 370, width: 85, height: 20, color: '#8B4513'},
+                    {x: 700, y: 320, width: 100, height: 20, color: '#A0522D'},
+                    {x: 870, y: 380, width: 80, height: 20, color: '#8B4513'},
+                    {x: 1020, y: 430, width: 95, height: 20, color: '#A0522D'},
+                    {x: 1180, y: 360, width: 90, height: 20, color: '#8B4513'},
+                    {x: 1340, y: 310, width: 85, height: 20, color: '#A0522D'},
+                    {x: 1500, y: 390, width: 100, height: 20, color: '#8B4513'},
+                    {x: 1670, y: 440, width: 90, height: 20, color: '#A0522D'},
+                    {x: 1830, y: 370, width: 95, height: 20, color: '#8B4513'}
+                );
+                
+                npcs.push(
+                    {x: 300, y: 440, width: 30, height: 30, type: 'person'},
+                    {x: 480, y: 390, width: 30, height: 30, type: 'person'},
+                    {x: 750, y: 290, width: 30, height: 30, type: 'person'},
+                    {x: 950, y: 350, width: 30, height: 30, type: 'person'},
+                    {x: 1250, y: 330, width: 30, height: 30, type: 'person'},
+                    {x: 1550, y: 360, width: 30, height: 30, type: 'person'}
+                );
+                
+                for(let i = 0; i < 20; i++) {
+                    coins.push({
+                        x: 250 + i * 90,
+                        y: 250 + Math.sin(i * 0.8) * 80,
+                        width: 20,
+                        height: 20,
+                        collected: false,
+                        floatOffset: i * 0.6
+                    });
+                }
+                
+                for(let i = 0; i < 10; i++) {
+                    platforms.push({
+                        x: 1900 + i * 50,
+                        y: canvas.height - 50,
+                        width: 50,
+                        height: 50,
+                        color: '#8B4513'
+                    });
+                }
+                
+                checkpoints.push({x: 2000, y: canvas.height - 100, width: 50, height: 50, active: false});
+                
+            } else if(level === 4) {
+                platforms.push(
+                    {x: 250, y: 470, width: 90, height: 20, color: '#505050'},
+                    {x: 420, y: 410, width: 80, height: 20, color: '#606060'},
+                    {x: 580, y: 350, width: 85, height: 20, color: '#505050'},
+                    {x: 750, y: 290, width: 75, height: 20, color: '#606060'},
+                    {x: 910, y: 340, width: 90, height: 20, color: '#505050'},
+                    {x: 1080, y: 280, width: 80, height: 20, color: '#606060'},
+                    {x: 1240, y: 390, width: 95, height: 20, color: '#505050'},
+                    {x: 1420, y: 330, width: 85, height: 20, color: '#606060'},
+                    {x: 1590, y: 270, width: 90, height: 20, color: '#505050'},
+                    {x: 1760, y: 360, width: 80, height: 20, color: '#606060'},
+                    {x: 1920, y: 300, width: 85, height: 20, color: '#505050'},
+                    {x: 2100, y: 400, width: 90, height: 20, color: '#606060'},
+                    {x: 2270, y: 340, width: 85, height: 20, color: '#505050'}
+                );
+                
+                for(let i = 0; i < 12; i++) {
+                    obstacles.push({
+                        x: 350 + i * 200,
+                        y: canvas.height - 100,
+                        width: 35,
+                        height: 35,
+                        type: 'bike',
+                        velocityX: -3.5 - Math.random() * 2.5,
+                        startX: 350 + i * 200
+                    });
+                }
+                
+                checkpoints.push({x: 2500, y: canvas.height - 100, width: 50, height: 50, active: false});
+                
+            } else if(level === 5) {
+                platforms.push(
+                    {x: 280, y: 490, width: 100, height: 20, color: '#6B8E23'},
+                    {x: 480, y: 440, width: 85, height: 20, color: '#7BA428'},
+                    {x: 670, y: 380, width: 90, height: 20, color: '#6B8E23'},
+                    {x: 870, y: 430, width: 75, height: 20, color: '#7BA428'},
+                    {x: 1050, y: 370, width: 95, height: 20, color: '#6B8E23'},
+                    {x: 1250, y: 460, width: 80, height: 20, color: '#7BA428'},
+                    {x: 1430, y: 400, width: 100, height: 20, color: '#6B8E23'},
+                    {x: 1620, y: 350, width: 85, height: 20, color: '#7BA428'},
+                    {x: 1800, y: 420, width: 90, height: 20, color: '#6B8E23'},
+                    {x: 1990, y: 380, width: 95, height: 20, color: '#7BA428'},
+                    {x: 2180, y: 440, width: 85, height: 20, color: '#6B8E23'},
+                    {x: 2360, y: 390, width: 100, height: 20, color: '#7BA428'}
+                );
+                
+                for(let i = 0; i < 7; i++) {
+                    obstacles.push({
+                        x: 400 + i * 300,
+                        y: canvas.height - 90,
+                        width: 30,
+                        height: 30,
+                        type: 'bike',
+                        velocityX: -2 - Math.random() * 1.5,
+                        startX: 400 + i * 300
+                    });
+                }
+                
+                for(let i = 0; i < 28; i++) {
+                    coins.push({
+                        x: 330 + i * 85,
+                        y: 200 + Math.sin(i * 0.6) * 100,
+                        width: 20,
+                        height: 20,
+                        collected: false,
+                        floatOffset: i * 0.55,
+                        type: 'flower'
+                    });
+                }
+                
+                checkpoints.push({x: 2600, y: canvas.height - 100, width: 50, height: 50, active: false});
+                
+            } else if(level === 6) {
+                platforms.push(
+                    {x: 250, y: 480, width: 90, height: 20, color: '#707070'},
+                    {x: 430, y: 420, width: 70, height: 20, color: '#808080'},
+                    {x: 590, y: 360, width: 80, height: 20, color: '#707070'},
+                    {x: 760, y: 300, width: 75, height: 20, color: '#808080'},
+                    {x: 930, y: 380, width: 85, height: 20, color: '#707070'},
+                    {x: 1100, y: 320, width: 70, height: 20, color: '#808080'},
+                    {x: 1260, y: 400, width: 90, height: 20, color: '#707070'},
+                    {x: 1440, y: 340, width: 75, height: 20, color: '#808080'},
+                    {x: 1600, y: 290, width: 80, height: 20, color: '#707070'},
+                    {x: 1770, y: 370, width: 85, height: 20, color: '#808080'},
+                    {x: 1940, y: 310, width: 70, height: 20, color: '#707070'},
+                    {x: 2100, y: 390, width: 90, height: 20, color: '#808080'},
+                    {x: 2280, y: 330, width: 85, height: 20, color: '#707070'}
+                );
+                
+                for(let i = 0; i < 9; i++) {
+                    obstacles.push({
+                        x: 400 + i * 220,
+                        y: canvas.height - 95,
+                        width: 35,
+                        height: 35,
+                        type: 'bike',
+                        velocityX: -4 - Math.random() * 2,
+                        startX: 400 + i * 220
+                    });
+                }
+                
+                for(let i = 0; i < 28; i++) {
+                    coins.push({
+                        x: 300 + i * 75,
+                        y: 160 + Math.sin(i) * 110,
+                        width: 20,
+                        height: 20,
+                        collected: false,
+                        floatOffset: i * 0.5,
+                        type: 'token'
+                    });
+                }
+                
+                checkpoints.push({x: 2500, y: canvas.height - 100, width: 50, height: 50, active: false});
+                npcs.push({x: 2500, y: canvas.height - 200, width: 150, height: 150, type: 'arcade'});
+            }
+            
+            player.x = 100;
+            player.y = 100;
+        }
+        
+        function drawPlayer() {
+            ctx.save();
+            
+            if(player.invincible && Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.globalAlpha = 0.5;
+            }
+            
+            let px = player.x - camera.x;
+            let py = player.y - camera.y;
+            
+            ctx.fillStyle = '#6B4423';
+            ctx.fillRect(px + 8, py - 4, 16, 10);
+            ctx.fillRect(px + 6, py + 2, 4, 8);
+            ctx.fillRect(px + 22, py + 2, 4, 8);
+            ctx.fillRect(px + 4, py + 8, 6, 6);
+            ctx.fillRect(px + 22, py + 8, 6, 6);
+            ctx.fillRect(px + 3, py + 12, 4, 8);
+            ctx.fillRect(px + 25, py + 12, 4, 8);
+            
+            ctx.fillStyle = '#8B6F47';
+            ctx.fillRect(px + 9, py, 14, 6);
+            
+            ctx.fillStyle = '#FFE4C4';
+            ctx.fillRect(px + 10, py + 6, 12, 14);
+            
+            ctx.fillStyle = '#4A2511';
+            ctx.fillRect(px + 12, py + 9, 2, 2);
+            ctx.fillRect(px + 18, py + 9, 2, 2);
+            
+            ctx.fillStyle = '#000';
+            ctx.fillRect(px + 13, py + 9, 1, 1);
+            ctx.fillRect(px + 19, py + 9, 1, 1);
+            
+            ctx.fillStyle = '#D4A5A5';
+            ctx.fillRect(px + 11, py + 14, 2, 1);
+            ctx.fillRect(px + 19, py + 14, 2, 1);
+            
+            ctx.fillStyle = '#CD5C5C';
+            ctx.fillRect(px + 13, py + 16, 6, 2);
+            
+            ctx.fillStyle = '#FFC0CB';
+            ctx.fillRect(px + 14, py + 17, 4, 1);
+            
+            ctx.fillStyle = '#FFE4C4';
+            ctx.fillRect(px + 10, py + 20, 2, 2);
+            ctx.fillRect(px + 20, py + 20, 2, 2);
+            
+            ctx.fillStyle = '#8B5CF6';
+            ctx.fillRect(px + 8, py + 20, 16, 14);
+            
+            ctx.fillStyle = '#7C3AED';
+            ctx.fillRect(px + 9, py + 22, 3, 10);
+            ctx.fillRect(px + 20, py + 22, 3, 10);
+            
+            ctx.fillStyle = '#FFE4C4';
+            ctx.fillRect(px + 6, py + 24, 4, 10);
+            ctx.fillRect(px + 22, py + 24, 4, 10);
+            
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(px + 6, py + 32, 4, 2);
+            ctx.fillRect(px + 22, py + 32, 4, 2);
+            
+            ctx.fillStyle = '#2563EB';
+            ctx.fillRect(px + 9, py + 34, 14, 10);
+            
+            ctx.fillStyle = '#1E40AF';
+            ctx.fillRect(px + 10, py + 35, 2, 8);
+            ctx.fillRect(px + 20, py + 35, 2, 8);
+            
+            ctx.fillStyle = '#60A5FA';
+            ctx.fillRect(px + 12, py + 36, 8, 1);
+            
+            ctx.fillStyle = '#FFE4C4';
+            ctx.fillRect(px + 9, py + 44, 4, 2);
+            ctx.fillRect(px + 19, py + 44, 4, 2);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(px + 8, py + 42, 7, 6);
+            ctx.fillRect(px + 17, py + 42, 7, 6);
+            
+            ctx.fillStyle = '#E5E7EB';
+            ctx.fillRect(px + 8, py + 46, 7, 2);
+            ctx.fillRect(px + 17, py + 46, 7, 2);
+            
+            ctx.restore();
+        }
+        
+        function drawRain() {
+            ctx.strokeStyle = 'rgba(174, 194, 224, 0.5)';
+            ctx.lineWidth = 1;
+            rain.forEach(drop => {
+                ctx.beginPath();
+                ctx.moveTo(drop.x - camera.x, drop.y);
+                ctx.lineTo(drop.x - camera.x, drop.y + 10);
+                ctx.stroke();
+                
+                drop.y += drop.speed;
+                if(drop.y > canvas.height) {
+                    drop.y = 0;
+                    drop.x = Math.random() * 5000;
+                }
+            });
+        }
+        
+        function drawPlatforms() {
+            platforms.forEach(platform => {
+                ctx.fillStyle = platform.color;
+                ctx.fillRect(
+                    platform.x - camera.x,
+                    platform.y - camera.y,
+                    platform.width,
+                    platform.height
+                );
+                
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                ctx.lineWidth = 1;
+                
+                let brickWidth = platform.height >= 30 ? 20 : 15;
+                let brickHeight = platform.height >= 30 ? 10 : platform.height / 2;
+                
+                let numBricksX = Math.max(1, Math.floor(platform.width / brickWidth));
+                let numBricksY = Math.max(1, Math.floor(platform.height / brickHeight));
+                
+                let actualBrickWidth = platform.width / numBricksX;
+                let actualBrickHeight = platform.height / numBricksY;
+                
+                for(let i = 0; i < numBricksX; i++) {
+                    for(let j = 0; j < numBricksY; j++) {
+                        let bx = platform.x - camera.x + (i * actualBrickWidth);
+                        let by = platform.y - camera.y + (j * actualBrickHeight);
+                        
+                        ctx.strokeRect(bx, by, actualBrickWidth, actualBrickHeight);
+                        
+                        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                        ctx.fillRect(bx + 1, by + 1, Math.min(3, actualBrickWidth / 4), Math.min(3, actualBrickHeight / 3));
+                        
+                        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                        if(actualBrickWidth > 6 && actualBrickHeight > 4) {
+                            ctx.fillRect(
+                                bx + actualBrickWidth - Math.min(4, actualBrickWidth / 3), 
+                                by + actualBrickHeight - 2, 
+                                Math.min(3, actualBrickWidth / 4), 
+                                1
+                            );
+                        }
+                    }
+                }
+            });
+        }
+        
+        function drawObstacles() {
+            obstacles.forEach(obs => {
+                if(obs.type === 'water') {
+                    let waterGrad = ctx.createLinearGradient(0, obs.y - camera.y, 0, obs.y - camera.y + obs.height);
+                    waterGrad.addColorStop(0, '#4169E1');
+                    waterGrad.addColorStop(0.5, '#1E90FF');
+                    waterGrad.addColorStop(1, '#1873CC');
+                    ctx.fillStyle = waterGrad;
+                    ctx.fillRect(obs.x - camera.x, obs.y - camera.y, obs.width, obs.height);
+                    
+                    ctx.strokeStyle = '#87CEEB';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    for(let i = 0; i < obs.width; i += 8) {
+                        let waveHeight = Math.sin(Date.now() / 300 + i / 10) * 3;
+                        ctx.arc(obs.x - camera.x + i, obs.y - camera.y + waveHeight, 4, 0, Math.PI);
+                    }
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = 'rgba(135, 206, 235, 0.6)';
+                    for(let i = 0; i < obs.width; i += 25) {
+                        if(Math.random() > 0.7) {
+                            ctx.fillRect(obs.x - camera.x + i, obs.y - camera.y - 5, 2, 2);
+                        }
+                    }
+                } else if(obs.type === 'bike') {
+                    let bx = obs.x - camera.x;
+                    let by = obs.y - camera.y;
+                    
+                    ctx.fillStyle = '#2C2C2C';
+                    ctx.beginPath();
+                    ctx.arc(bx + 8, by + 28, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#555';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#2C2C2C';
+                    ctx.beginPath();
+                    ctx.arc(bx + 28, by + 28, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#555';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    ctx.strokeStyle = '#E74C3C';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(bx + 8, by + 28);
+                    ctx.lineTo(bx + 18, by + 15);
+                    ctx.lineTo(bx + 28, by + 28);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(bx + 16, by + 12, 8, 3);
+                    
+                    ctx.strokeStyle = '#555';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(bx + 28, by + 28);
+                    ctx.lineTo(bx + 28, by + 18);
+                    ctx.lineTo(bx + 25, by + 16);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(bx + 28, by + 18);
+                    ctx.lineTo(bx + 31, by + 16);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(bx + 17, by + 22, 4, 2);
+                    
+                    ctx.strokeStyle = '#8B7355';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(bx + 26, by + 10, 8, 6);
+                    
+                    obs.x += obs.velocityX;
+                    if(obs.x < -100) obs.x = obs.startX + 500;
+                }
+            });
+        }
+        
+        function drawNPCs() {
+            npcs.forEach(npc => {
+                if(npc.type === 'person') {
+                    let px = npc.x - camera.x;
+                    let py = npc.y - camera.y;
+                    
+                    ctx.fillStyle = '#34495E';
+                    ctx.fillRect(px + 8, py + 20, 5, 10);
+                    ctx.fillRect(px + 17, py + 20, 5, 10);
+                    
+                    ctx.fillStyle = '#3498DB';
+                    ctx.fillRect(px + 7, py + 5, 16, 15);
+                    
+                    ctx.fillStyle = '#2980B9';
+                    ctx.fillRect(px + 3, py + 8, 4, 10);
+                    ctx.fillRect(px + 23, py + 8, 4, 10);
+                    
+                    ctx.fillStyle = '#FFDAB9';
+                    ctx.beginPath();
+                    ctx.arc(px + 15, py - 2, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(px + 10, py - 8, 10, 6);
+                    
+                    if(Math.floor(px / 100) % 2 === 0) {
+                        ctx.fillStyle = '#E74C3C';
+                        ctx.fillRect(px + 9, py - 10, 12, 4);
+                        ctx.fillRect(px + 11, py - 13, 8, 3);
+                    }
+                    
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(px + 12, py - 1, 2, 2);
+                    ctx.fillRect(px + 16, py - 1, 2, 2);
+                } else if(npc.type === 'arcade') {
+                    let ax = npc.x - camera.x;
+                    let ay = npc.y - camera.y;
+                    
+                    ctx.fillStyle = '#0f0f1e';
+                    ctx.fillRect(ax, ay, npc.width, npc.height);
+                    
+                    ctx.strokeStyle = '#ff6b6b';
+                    ctx.lineWidth = 4;
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = '#ff6b6b';
+                    ctx.strokeRect(ax + 5, ay + 5, npc.width - 10, npc.height - 10);
+                    
+                    ctx.shadowBlur = 30;
+                    ctx.fillStyle = Math.floor(Date.now() / 300) % 2 === 0 ? '#FFD93D' : '#ff6b6b';
+                    ctx.font = 'bold 24px Courier';
+                    ctx.fillText('ARCADE', ax + 25, ay + 35);
+                    ctx.shadowBlur = 0;
+                    
+                    const arcadeMachines = [
+                        {x: 15, color: '#00CED1', screen: '#1E90FF'},
+                        {x: 55, color: '#FF1493', screen: '#FF69B4'},
+                        {x: 95, color: '#32CD32', screen: '#90EE90'}
+                    ];
+                    
+                    arcadeMachines.forEach(machine => {
+                        let mx = ax + machine.x;
+                        let my = ay + 50;
+                        
+                        ctx.fillStyle = machine.color;
+                        ctx.fillRect(mx, my, 35, 90);
+                        
+                        ctx.fillStyle = '#000';
+                        ctx.fillRect(mx + 3, my + 5, 29, 40);
+                        
+                        ctx.fillStyle = machine.screen;
+                        ctx.fillRect(mx + 5, my + 7, 25, 36);
+                        
+                        ctx.fillStyle = '#FFF';
+                        for(let p = 0; p < 8; p++) {
+                            let px = mx + 7 + (p % 4) * 6;
+                            let py = my + 10 + Math.floor(p / 4) * 15;
+                            ctx.fillRect(px, py, 4, 4);
+                        }
+                        
+                        ctx.fillStyle = '#222';
+                        ctx.fillRect(mx + 2, my + 48, 31, 25);
+                        
+                        ctx.fillStyle = '#FF0000';
+                        ctx.beginPath();
+                        ctx.arc(mx + 10, my + 60, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#8B0000';
+                        ctx.fillRect(mx + 9, my + 60, 2, 8);
+                        
+                        const buttonColors = ['#FFFF00', '#00FF00', '#0000FF', '#FF00FF'];
+                        for(let b = 0; b < 4; b++) {
+                            ctx.fillStyle = buttonColors[b];
+                            ctx.beginPath();
+                            ctx.arc(mx + 20 + (b % 2) * 8, my + 56 + Math.floor(b / 2) * 8, 3, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        
+                        ctx.fillStyle = Math.floor(Date.now() / 500 + machine.x) % 2 === 0 ? '#00FF00' : '#FF0000';
+                        ctx.fillRect(mx + 5, my + 78, 3, 3);
+                        ctx.fillRect(mx + 27, my + 78, 3, 3);
+                    });
+                    
+                    ctx.fillStyle = '#4E342E';
+                    ctx.fillRect(ax + 5, ay + npc.height - 50, 30, 45);
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(ax + 28, ay + npc.height - 30, 4, 2);
+                    
+                    ctx.fillStyle = '#FFD93D';
+                    ctx.fillRect(ax + npc.width - 45, ay + 50, 35, 30);
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(ax + npc.width - 45, ay + 50, 35, 30);
+                }
+            });
+        }
+        
+        function drawCoins() {
+            coins.forEach(coin => {
+                if(coin.collected) return;
+                
+                let floatY = Math.sin(Date.now() / 500 + coin.floatOffset) * 8;
+                let cx = coin.x - camera.x;
+                let cy = coin.y - camera.y + floatY;
+                
+                if(coin.type === 'flower') {
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    for(let i = 0; i < 5; i++) {
+                        let angle = (Math.PI * 2 / 5) * i + Date.now() / 1000;
+                        let px = cx + 10 + Math.cos(angle) * 8;
+                        let py = cy + 10 + Math.sin(angle) * 8;
+                        ctx.arc(px, py, 4, 0, Math.PI * 2);
+                    }
+                    ctx.fill();
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if(coin.type === 'token') {
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFD700';
+                    ctx.font = 'bold 12px Courier';
+                    ctx.fillText('$', cx + 6, cy + 15);
+                } else {
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#FFD700';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+        }
+        
+        function drawCoins() {
+            coins.forEach(coin => {
+                if(coin.collected) return;
+                
+                let floatY = Math.sin(Date.now() / 500 + coin.floatOffset) * 8;
+                let cx = coin.x - camera.x;
+                let cy = coin.y - camera.y + floatY;
+                
+                if(coin.type === 'flower') {
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    for(let i = 0; i < 5; i++) {
+                        let angle = (Math.PI * 2 / 5) * i + Date.now() / 1000;
+                        let px = cx + 10 + Math.cos(angle) * 8;
+                        let py = cy + 10 + Math.sin(angle) * 8;
+                        ctx.arc(px, py, 4, 0, Math.PI * 2);
+                    }
+                    ctx.fill();
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if(coin.type === 'token') {
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFD700';
+                    ctx.font = 'bold 12px Courier';
+                    ctx.fillText('$', cx + 6, cy + 15);
+                } else {
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#FFD700';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(cx + 10, cy + 10, 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+        }
+        
+        function drawCheckpoints() {
+            checkpoints.forEach(cp => {
+                let floatOffset = Math.sin(Date.now() / 500) * 5;
+                let cx = cp.x - camera.x;
+                let cy = cp.y - camera.y + floatOffset;
+                
+                ctx.fillStyle = cp.active ? '#555' : '#8B4513';
+                ctx.fillRect(cx + 5, cy, 4, cp.height);
+                
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(cx + 7, cy - 3, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#FFA500';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                let wave = Math.sin(Date.now() / 200) * 3;
+                ctx.fillStyle = cp.active ? '#00FF00' : '#FF4444';
+                ctx.beginPath();
+                ctx.moveTo(cx + 9, cy + 5);
+                ctx.lineTo(cx + 35 + wave, cy + 5);
+                ctx.lineTo(cx + 35 + wave, cy + 25);
+                ctx.lineTo(cx + 9, cy + 25);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.strokeStyle = cp.active ? '#00CC00' : '#CC0000';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = cp.active ? '#FFFF00' : '#FFF';
+                let starX = cx + 22 + wave / 2;
+                let starY = cy + 15;
+                ctx.beginPath();
+                for(let i = 0; i < 5; i++) {
+                    let angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+                    let x = starX + Math.cos(angle) * 6;
+                    let y = starY + Math.sin(angle) * 6;
+                    if(i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(cx, cy + cp.height - 5, 14, 8);
+                
+                if(cp.active) {
+                    for(let i = 0; i < 3; i++) {
+                        let px = cx + 20 + Math.sin(Date.now() / 200 + i) * 15;
+                        let py = cy + 15 + Math.cos(Date.now() / 300 + i) * 10;
+                        ctx.fillStyle = `rgba(255, 255, 0, ${0.5 + Math.sin(Date.now() / 400 + i) * 0.5})`;
+                        ctx.fillRect(px, py, 3, 3);
+                    }
+                }
+            });
+        }
+        
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+        
+        function updatePlayer() {
+            if(keys['ArrowLeft'] || touchLeft) {
+                player.velocityX = -player.speed;
+                player.direction = -1;
+            } else if(keys['ArrowRight'] || touchRight) {
+                player.velocityX = player.speed;
+                player.direction = 1;
+            } else {
+                player.velocityX *= 0.8;
+            }
+            
+            if((keys['ArrowUp'] || keys[' '] || touchJump) && player.onGround) {
+                player.velocityY = player.jumpPower;
+                player.onGround = false;
+            }
+            
+            player.velocityY += player.gravity;
+            
+            player.x += player.velocityX;
+            player.y += player.velocityY;
+            
+            player.onGround = false;
+            platforms.forEach(platform => {
+                if(checkCollision(player, platform)) {
+                    if(player.velocityY > 0 && player.y < platform.y) {
+                        player.y = platform.y - player.height;
+                        player.velocityY = 0;
+                        player.onGround = true;
+                    } else if(player.velocityY < 0 && player.y > platform.y) {
+                        player.y = platform.y + platform.height;
+                        player.velocityY = 0;
+                    }
+                }
+            });
+            
+            obstacles.forEach(obs => {
+                if(checkCollision(player, obs) && !player.invincible) {
+                    lives--;
+                    player.invincible = true;
+                    player.invincibleTime = Date.now() + 2000;
+                    updateHUD();
+                    
+                    if(lives <= 0) {
+                        alert('Game Over! Score: ' + score);
+                        location.reload();
+                    }
+                }
+            });
+            
+            coins.forEach(coin => {
+                if(!coin.collected && checkCollision(player, coin)) {
+                    coin.collected = true;
+                    score += 10;
+                    updateHUD();
+                }
+            });
+            
+            coins.forEach(coin => {
+                if(!coin.collected && checkCollision(player, coin)) {
+                    coin.collected = true;
+                    score += 10;
+                    updateHUD();
+                }
+            });
+            
+            checkpoints.forEach(cp => {
+                if(checkCollision(player, cp) && !cp.active) {
+                    cp.active = true;
+                    score += 100;
+                    currentLevel++;
+                    
+                    if(currentLevel > 6) {
+                        alert('Congratulations! You reached the arcade! Score: ' + score);
+                        location.reload();
+                    } else {
+                        generateLevel(currentLevel);
+                    }
+                    
+                    updateHUD();
+                }
+            });
+            
+            if(player.y > canvas.height + 100) {
+                if(currentLevel === 2 || currentLevel === 3) {
+                    alert('Game Over! You fell! Score: ' + score);
+                    location.reload();
+                } else {
+                    lives--;
+                    player.x = 100;
+                    player.y = 100;
+                    player.velocityY = 0;
+                    updateHUD();
+                    
+                    if(lives <= 0) {
+                        alert('Game Over! Score: ' + score);
+                        location.reload();
+                    }
+                }
+            }
+            
+            if(player.invincible && Date.now() > player.invincibleTime) {
+                player.invincible = false;
+            }
+            
+            camera.x = player.x - canvas.width / 2 + player.width / 2;
+            camera.x = Math.max(0, camera.x);
+        }
+        
+        function updateHUD() {
+            document.getElementById('lives').textContent = lives;
+            document.getElementById('score').textContent = score;
+            document.getElementById('level').textContent = currentLevel;
+            document.getElementById('levelName').textContent = levelNames[currentLevel - 1] || '';
+        }
+        
+        function drawBackground() {
+            if(currentLevel === 1) {
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#6B7C8C');
+                gradient.addColorStop(0.3, '#5A6B7A');
+                gradient.addColorStop(0.6, '#495A68');
+                gradient.addColorStop(1, '#384856');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                const buildingColors = ['#8B4513', '#A0522D', '#6B4423', '#8B5A3C', '#654321', '#5C4033'];
+                for(let i = 0; i < 15; i++) {
+                    let x = i * 120 - (camera.x * 0.3);
+                    let height = 180 + Math.sin(i) * 80;
+                    let buildingColor = buildingColors[i % buildingColors.length];
+                    
+                    ctx.fillStyle = buildingColor;
+                    ctx.fillRect(x, canvas.height - height - 50, 100, height);
+                    
+                    ctx.fillStyle = '#2F1F1F';
+                    ctx.beginPath();
+                    ctx.moveTo(x - 5, canvas.height - height - 50);
+                    ctx.lineTo(x + 50, canvas.height - height - 70);
+                    ctx.lineTo(x + 105, canvas.height - height - 50);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    if(i % 3 === 0) {
+                        let flagX = x + 50;
+                        let flagY = canvas.height - height - 70;
+                        ctx.strokeStyle = '#95A5A6';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(flagX, flagY);
+                        ctx.lineTo(flagX, flagY - 35);
+                        ctx.stroke();
+                        ctx.fillStyle = '#C0392B';
+                        ctx.fillRect(flagX, flagY - 35, 20, 4);
+                        ctx.fillStyle = '#ECF0F1';
+                        ctx.fillRect(flagX, flagY - 31, 20, 4);
+                        ctx.fillStyle = '#2980B9';
+                        ctx.fillRect(flagX, flagY - 27, 20, 4);
+                    }
+                    
+                    ctx.fillStyle = i % 2 === 0 ? '#FFEAA7' : '#FFD700';
+                    for(let j = 0; j < 6; j++) {
+                        for(let k = 0; k < 2; k++) {
+                            if(Math.random() > 0.2) {
+                                ctx.fillRect(x + 20 + k * 35, canvas.height - height - 35 + j * 28, 20, 25);
+                                ctx.strokeStyle = '#FFF';
+                                ctx.lineWidth = 2;
+                                ctx.strokeRect(x + 20 + k * 35, canvas.height - height - 35 + j * 28, 20, 25);
+                            }
+                        }
+                    }
+                }
+                
+                let museumX = 400 - (camera.x * 0.15);
+                let museumY = 100;
+                
+                ctx.fillStyle = '#8B3A3A';
+                ctx.fillRect(museumX, museumY + 80, 280, 120);
+                
+                ctx.fillStyle = '#6B2A2A';
+                ctx.fillRect(museumX + 10, museumY + 60, 260, 20);
+                
+                ctx.fillStyle = '#8B3A3A';
+                ctx.fillRect(museumX + 110, museumY, 60, 80);
+                
+                ctx.fillStyle = '#2C3E50';
+                ctx.beginPath();
+                ctx.moveTo(museumX + 105, museumY);
+                ctx.lineTo(museumX + 140, museumY - 40);
+                ctx.lineTo(museumX + 175, museumY);
+                ctx.fill();
+                
+                ctx.fillStyle = '#DAA520';
+                ctx.fillRect(museumX + 137, museumY - 50, 6, 10);
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(museumX + 140, museumY - 50, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#4A90E2';
+                ctx.fillRect(museumX + 130, museumY + 20, 20, 30);
+                ctx.strokeStyle = '#2C3E50';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(museumX + 130, museumY + 20, 20, 30);
+                
+                ctx.fillStyle = '#8B3A3A';
+                ctx.fillRect(museumX + 20, museumY + 40, 40, 40);
+                ctx.fillRect(museumX + 220, museumY + 40, 40, 40);
+                
+                ctx.fillStyle = '#2C3E50';
+                ctx.beginPath();
+                ctx.moveTo(museumX + 15, museumY + 40);
+                ctx.lineTo(museumX + 40, museumY + 20);
+                ctx.lineTo(museumX + 65, museumY + 40);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(museumX + 215, museumY + 40);
+                ctx.lineTo(museumX + 240, museumY + 20);
+                ctx.lineTo(museumX + 265, museumY + 40);
+                ctx.fill();
+                
+                ctx.fillStyle = '#2C3E50';
+                ctx.fillRect(museumX + 115, museumY + 140, 50, 60);
+                ctx.beginPath();
+                ctx.arc(museumX + 140, museumY + 140, 25, Math.PI, 0);
+                ctx.fill();
+                
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(museumX + 125, museumY + 160, 30, 40);
+                
+                ctx.fillStyle = '#4A90E2';
+                for(let i = 0; i < 3; i++) {
+                    for(let j = 0; j < 2; j++) {
+                        ctx.fillRect(museumX + 30 + i * 25, museumY + 100 + j * 35, 18, 28);
+                        ctx.strokeStyle = '#2C3E50';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(museumX + 30 + i * 25, museumY + 100 + j * 35, 18, 28);
+                    }
+                }
+                for(let i = 0; i < 3; i++) {
+                    for(let j = 0; j < 2; j++) {
+                        ctx.fillRect(museumX + 180 + i * 25, museumY + 100 + j * 35, 18, 28);
+                        ctx.strokeStyle = '#2C3E50';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(museumX + 180 + i * 25, museumY + 100 + j * 35, 18, 28);
+                    }
+                }
+                
+                ctx.fillStyle = '#A0826D';
+                for(let i = 0; i < 8; i++) {
+                    ctx.fillRect(museumX + 15 + i * 35, museumY + 80, 6, 120);
+                }
+                
+                ctx.fillStyle = '#2C3E50';
+                ctx.font = 'bold 12px serif';
+                ctx.fillText('RIJKSMUSEUM', museumX + 85, museumY + 95);
+                
+                let canalGradient = ctx.createLinearGradient(0, canvas.height - 150, 0, canvas.height - 50);
+                canalGradient.addColorStop(0, '#1e3a5f');
+                canalGradient.addColorStop(0.5, '#2a4a6f');
+                canalGradient.addColorStop(1, '#1a2f4f');
+                ctx.fillStyle = canalGradient;
+                ctx.fillRect(0 - camera.x * 0.5, canvas.height - 150, 5000, 100);
+                
+                ctx.strokeStyle = '#3e5a7f';
+                ctx.lineWidth = 2;
+                for(let i = 0; i < 100; i++) {
+                    ctx.beginPath();
+                    ctx.arc(i * 50 - (camera.x * 0.5), canvas.height - 120 + Math.sin(Date.now() / 500 + i) * 5, 20, 0, Math.PI);
+                    ctx.stroke();
+                }
+                
+                ctx.globalAlpha = 0.3;
+                for(let i = 0; i < 15; i++) {
+                    let x = i * 120 - (camera.x * 0.3);
+                    let buildingColor = buildingColors[i % buildingColors.length];
+                    ctx.fillStyle = buildingColor;
+                    ctx.fillRect(x + 10, canvas.height - 140, 80, 80);
+                }
+                ctx.globalAlpha = 1.0;
+                
+                ctx.fillStyle = '#8B7355';
+                for(let i = 0; i < 5; i++) {
+                    let bridgeX = 200 + i * 400 - (camera.x * 0.4);
+                    ctx.fillRect(bridgeX, canvas.height - 160, 150, 15);
+                    ctx.fillStyle = '#654321';
+                    for(let j = 0; j < 15; j++) {
+                        ctx.fillRect(bridgeX + j * 10, canvas.height - 175, 3, 15);
+                    }
+                    ctx.fillStyle = '#8B7355';
+                }
+                
+                ctx.fillStyle = '#8B4513';
+                for(let i = 0; i < 6; i++) {
+                    let boatX = 150 + i * 350 - (camera.x * 0.45);
+                    let boatY = canvas.height - 130 + Math.sin(Date.now() / 1000 + i) * 3;
+                    ctx.fillRect(boatX, boatY, 60, 15);
+                    ctx.fillStyle = '#654321';
+                    ctx.fillRect(boatX + 5, boatY - 8, 50, 8);
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillStyle = '#A0522D';
+                    ctx.fillRect(boatX + 10, boatY - 6, 12, 6);
+                    ctx.fillRect(boatX + 38, boatY - 6, 12, 6);
+                }
+                
+                for(let i = 0; i < 12; i++) {
+                    let lampX = 100 + i * 200 - (camera.x * 0.5);
+                    let lampY = canvas.height - 170;
+                    ctx.fillStyle = '#2C3E50';
+                    ctx.fillRect(lampX, lampY, 4, 120);
+                    ctx.fillStyle = '#F39C12';
+                    ctx.beginPath();
+                    ctx.arc(lampX + 2, lampY - 5, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = 'rgba(243, 156, 18, 0.2)';
+                    ctx.beginPath();
+                    ctx.moveTo(lampX + 2, lampY - 5);
+                    ctx.lineTo(lampX - 20, lampY + 40);
+                    ctx.lineTo(lampX + 24, lampY + 40);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                const tulipColors = ['#E74C3C', '#F39C12', '#9B59B6', '#E91E63', '#FF6B6B'];
+                for(let i = 0; i < 25; i++) {
+                    let tulipX = 80 + i * 150 - (camera.x * 0.6);
+                    let tulipY = canvas.height - 180;
+                    ctx.strokeStyle = '#27AE60';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(tulipX, tulipY + 20);
+                    ctx.lineTo(tulipX, tulipY);
+                    ctx.stroke();
+                    ctx.fillStyle = tulipColors[i % tulipColors.length];
+                    ctx.beginPath();
+                    ctx.ellipse(tulipX, tulipY - 3, 4, 6, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#229954';
+                    ctx.fillRect(tulipX + 2, tulipY + 10, 8, 3);
+                }
+                
+                for(let i = 0; i < 15; i++) {
+                    let x = i * 120 - (camera.x * 0.3);
+                    let buildingHeight = 180 + Math.sin(i) * 80;
+                    for(let j = 1; j < 4; j++) {
+                        let boxY = canvas.height - buildingHeight - 35 + j * 28;
+                        ctx.fillStyle = '#8B4513';
+                        ctx.fillRect(x + 18, boxY + 25, 24, 6);
+                        for(let k = 0; k < 3; k++) {
+                            ctx.fillStyle = tulipColors[(i + k) % tulipColors.length];
+                            ctx.fillRect(x + 20 + k * 7, boxY + 22, 3, 3);
+                        }
+                    }
+                }
+                
+            } else if(currentLevel === 2) {
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#0a0a1a');
+                gradient.addColorStop(0.5, '#1a1a2e');
+                gradient.addColorStop(1, '#16213e');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#FFF';
+                for(let i = 0; i < 50; i++) {
+                    let sx = (i * 137) % (canvas.width + 400) - (camera.x * 0.05);
+                    let sy = (i * 79) % 150;
+                    ctx.fillRect(sx, sy, 2, 2);
+                }
+                
+                const buildings = [
+                    {x: 50, width: 90, height: 250, color: '#2d3436'},
+                    {x: 160, width: 85, height: 270, color: '#34495e'},
+                    {x: 265, width: 95, height: 260, color: '#2c3e50'},
+                    {x: 380, width: 80, height: 280, color: '#2d3436'},
+                    {x: 480, width: 100, height: 265, color: '#34495e'},
+                    {x: 600, width: 90, height: 275, color: '#2c3e50'},
+                    {x: 710, width: 85, height: 255, color: '#2d3436'},
+                    {x: 815, width: 95, height: 290, color: '#34495e'},
+                    {x: 930, width: 88, height: 270, color: '#2c3e50'}
+                ];
+                
+                buildings.forEach(building => {
+                    let bx = building.x - (camera.x * 0.25);
+                    ctx.fillStyle = building.color;
+                    ctx.fillRect(bx, canvas.height - building.height, building.width, building.height);
+                    
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.beginPath();
+                    ctx.moveTo(bx - 5, canvas.height - building.height);
+                    ctx.lineTo(bx + building.width/2, canvas.height - building.height - 40);
+                    ctx.lineTo(bx + building.width + 5, canvas.height - building.height);
+                    ctx.fill();
+                    
+                    for(let floor = 0; floor < 4; floor++) {
+                        for(let win = 0; win < 3; win++) {
+                            let wx = bx + 15 + win * 25;
+                            let wy = canvas.height - building.height + 50 + floor * 50;
+                            
+                            ctx.fillStyle = '#1a1a1a';
+                            ctx.fillRect(wx, wy, 20, 30);
+                            
+                            let pulse = Math.sin(Date.now() / 500 + win + floor) * 0.3 + 0.7;
+                            ctx.fillStyle = `rgba(255, 0, 80, ${pulse * 0.8})`;
+                            ctx.fillRect(wx + 2, wy + 2, 16, 26);
+                            
+                            if((win + floor) % 3 === 0) {
+                                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                                ctx.fillRect(wx + 6, wy + 8, 8, 12);
+                            }
+                            
+                            ctx.fillStyle = `rgba(255, 20, 90, ${pulse * 0.4})`;
+                            ctx.fillRect(wx - 2, wy, 24, 30);
+                        }
+                    }
+                });
+                
+                ctx.fillStyle = '#0a0f1a';
+                ctx.fillRect(0, canvas.height - 80, canvas.width, 80);
+                
+                ctx.globalAlpha = 0.3;
+                buildings.forEach(building => {
+                    let bx = building.x - (camera.x * 0.25);
+                    ctx.fillStyle = building.color;
+                    ctx.fillRect(bx, canvas.height - 70, building.width, 40);
+                    
+                    for(let win = 0; win < 3; win++) {
+                        let wx = bx + 15 + win * 25;
+                        let pulse = Math.sin(Date.now() / 500 + win) * 0.3 + 0.7;
+                        ctx.fillStyle = `rgba(255, 0, 80, ${pulse * 0.5})`;
+                        ctx.fillRect(wx, canvas.height - 65, 20, 35);
+                    }
+                });
+                ctx.globalAlpha = 1.0;
+                
+                ctx.strokeStyle = 'rgba(100, 150, 200, 0.3)';
+                ctx.lineWidth = 2;
+                for(let i = 0; i < 15; i++) {
+                    let waveX = i * 80 - (camera.x * 0.6) % 80;
+                    let waveY = canvas.height - 60 + Math.sin((Date.now() / 300) + i) * 5;
+                    ctx.beginPath();
+                    ctx.arc(waveX, waveY, 15, 0, Math.PI);
+                    ctx.stroke();
+                }
+                
+                for(let i = 0; i < 3; i++) {
+                    let bridgeX = 200 + i * 350 - (camera.x * 0.35);
+                    ctx.fillStyle = '#4a4a4a';
+                    ctx.beginPath();
+                    ctx.arc(bridgeX + 60, canvas.height - 85, 70, Math.PI, 0);
+                    ctx.fill();
+                    ctx.fillStyle = '#2a2a2a';
+                    ctx.fillRect(bridgeX, canvas.height - 90, 120, 8);
+                    for(let j = 0; j < 12; j++) {
+                        ctx.fillRect(bridgeX + j * 10, canvas.height - 100, 3, 10);
+                    }
+                }
+                
+                const neonSigns = [
+                    {x: 120, y: 180, text: 'BAR', color: '#FF00FF', width: 60},
+                    {x: 350, y: 160, text: 'CAFE', color: '#00FFFF', width: 80},
+                    {x: 520, y: 175, text: 'XXX', color: '#FF0066', width: 60},
+                    {x: 680, y: 155, text: 'CLUB', color: '#00FF00', width: 80},
+                    {x: 860, y: 170, text: 'LIVE', color: '#FFFF00', width: 70}
+                ];
+                
+                neonSigns.forEach(sign => {
+                    let nx = sign.x - (camera.x * 0.3);
+                    let pulse = Math.sin(Date.now() / 400) * 0.3 + 0.7;
+                    
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = sign.color;
+                    ctx.fillStyle = sign.color;
+                    ctx.globalAlpha = pulse * 0.8;
+                    ctx.fillRect(nx - 5, sign.y - 5, sign.width + 10, 35);
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1.0;
+                    
+                    ctx.fillStyle = sign.color;
+                    ctx.font = 'bold 24px Arial';
+                    ctx.fillText(sign.text, nx, sign.y + 20);
+                    
+                    ctx.strokeStyle = sign.color;
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(nx - 5, sign.y - 5, sign.width + 10, 35);
+                });
+                
+                for(let i = 0; i < 12; i++) {
+                    let lx = 80 + i * 90 - (camera.x * 0.4);
+                    
+                    ctx.fillStyle = '#2a2a2a';
+                    ctx.fillRect(lx, canvas.height - 180, 6, 100);
+                    
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.fillRect(lx - 8, canvas.height - 185, 22, 8);
+                    
+                    let lampPulse = Math.sin(Date.now() / 600 + i) * 0.2 + 0.8;
+                    ctx.fillStyle = `rgba(255, 50, 100, ${lampPulse})`;
+                    ctx.beginPath();
+                    ctx.arc(lx + 3, canvas.height - 180, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.globalAlpha = 0.2;
+                    ctx.fillStyle = '#ff3366';
+                    ctx.beginPath();
+                    ctx.moveTo(lx - 5, canvas.height - 170);
+                    ctx.lineTo(lx - 20, canvas.height - 80);
+                    ctx.lineTo(lx + 25, canvas.height - 80);
+                    ctx.lineTo(lx + 11, canvas.height - 170);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                }
+                
+                for(let i = 0; i < 6; i++) {
+                    let bikeX = 150 + i * 170 - (camera.x * 0.45);
+                    let bikeY = canvas.height - 95;
+                    
+                    ctx.strokeStyle = i % 2 === 0 ? '#555' : '#666';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(bikeX, bikeY);
+                    ctx.lineTo(bikeX + 20, bikeY - 15);
+                    ctx.lineTo(bikeX + 20, bikeY + 5);
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(bikeX + 35, bikeY);
+                    ctx.lineTo(bikeX + 30, bikeY - 15);
+                    ctx.stroke();
+                    
+                    ctx.strokeStyle = '#444';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(bikeX, bikeY, 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(bikeX + 35, bikeY, 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                const people = [
+                    {x: 250, y: canvas.height - 120},
+                    {x: 420, y: canvas.height - 125},
+                    {x: 630, y: canvas.height - 118},
+                    {x: 790, y: canvas.height - 122}
+                ];
+                
+                people.forEach(person => {
+                    let px = person.x - (camera.x * 0.5);
+                    ctx.fillStyle = '#1a1a2e';
+                    ctx.fillRect(px + 6, person.y - 25, 8, 8);
+                    ctx.fillRect(px + 4, person.y - 17, 12, 15);
+                    ctx.fillRect(px + 5, person.y - 2, 4, 10);
+                    ctx.fillRect(px + 11, person.y - 2, 4, 10);
+                    
+                    ctx.fillStyle = 'rgba(255, 20, 80, 0.3)';
+                    ctx.fillRect(px, person.y - 28, 20, 36);
+                });
+                
+                for(let i = 0; i < 5; i++) {
+                    let doorX = 100 + i * 200 - (camera.x * 0.35);
+                    let doorY = canvas.height - 140;
+                    
+                    ctx.fillStyle = '#3a3a3a';
+                    ctx.fillRect(doorX, doorY, 45, 60);
+                    
+                    ctx.fillStyle = '#2a2a2a';
+                    ctx.fillRect(doorX + 3, doorY + 3, 39, 54);
+                    
+                    ctx.fillStyle = 'rgba(255, 0, 80, 0.7)';
+                    ctx.fillRect(doorX + 8, doorY + 8, 29, 25);
+                    
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(doorX + 35, doorY + 35, 4, 2);
+                }
+                
+                const graffitiArt = [
+                    {x: 300, y: canvas.height - 200, color: '#FF00FF'},
+                    {x: 650, y: canvas.height - 180, color: '#00FFFF'},
+                    {x: 950, y: canvas.height - 210, color: '#FFFF00'}
+                ];
+                
+                graffitiArt.forEach(art => {
+                    let gx = art.x - (camera.x * 0.3);
+                    ctx.fillStyle = art.color;
+                    ctx.globalAlpha = 0.6;
+                    ctx.beginPath();
+                    ctx.moveTo(gx + 15, gx % 2 === 0 ? art.y + 5 : art.y + 8);
+                    ctx.bezierCurveTo(gx + 15, gx % 2 === 0 ? art.y : art.y + 3, gx + 5, art.y, gx + 5, art.y + 10);
+                    ctx.bezierCurveTo(gx + 5, art.y + 18, gx + 15, art.y + 25, gx + 15, art.y + 28);
+                    ctx.bezierCurveTo(gx + 15, art.y + 25, gx + 25, art.y + 18, gx + 25, art.y + 10);
+                    ctx.bezierCurveTo(gx + 25, art.y, gx + 15, gx % 2 === 0 ? art.y : art.y + 3, gx + 15, gx % 2 === 0 ? art.y + 5 : art.y + 8);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                });
+                
+            } else if(currentLevel === 3) {
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#d4a574');
+                gradient.addColorStop(0.5, '#c09060');
+                gradient.addColorStop(1, '#8b6f47');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#8B4513';
+                for(let i = 0; i < 50; i++) {
+                    ctx.fillRect(i * 30 - (camera.x * 0.3) % 30, 0, 28, canvas.height);
+                    ctx.fillStyle = '#A0522D';
+                    ctx.fillRect(i * 30 - (camera.x * 0.3) % 30 + 2, 0, 24, canvas.height);
+                    ctx.fillStyle = '#8B4513';
+                }
+                
+                let windowX = 100 - (camera.x * 0.2);
+                ctx.fillStyle = '#87CEEB';
+                ctx.fillRect(windowX, 50, 120, 100);
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(windowX, 50, 120, 100);
+                ctx.strokeRect(windowX + 58, 50, 4, 100);
+                ctx.strokeRect(windowX, 98, 120, 4);
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(windowX + 10, 80, 30, 60);
+                ctx.fillRect(windowX + 50, 70, 25, 70);
+                ctx.fillRect(windowX + 85, 75, 30, 65);
+                
+                const frames = [{x: 300, y: 80}, {x: 500, y: 90}, {x: 800, y: 85}];
+                frames.forEach(frame => {
+                    let fx = frame.x - (camera.x * 0.35);
+                    ctx.fillStyle = '#654321';
+                    ctx.fillRect(fx, frame.y, 60, 70);
+                    ctx.fillStyle = '#D4AF37';
+                    ctx.fillRect(fx + 5, frame.y + 5, 50, 60);
+                    ctx.fillStyle = '#E74C3C';
+                    ctx.fillRect(fx + 15, frame.y + 20, 10, 15);
+                    ctx.fillRect(fx + 30, frame.y + 25, 10, 15);
+                    ctx.fillStyle = '#27AE60';
+                    ctx.fillRect(fx + 17, frame.y + 35, 6, 20);
+                    ctx.fillRect(fx + 32, frame.y + 40, 6, 15);
+                });
+                
+                let vanGoghX = 100 - (camera.x * 0.35);
+                let vanGoghY = 70;
+                
+                ctx.fillStyle = '#DAA520';
+                ctx.fillRect(vanGoghX, vanGoghY, 85, 105);
+                ctx.fillStyle = '#B8860B';
+                ctx.fillRect(vanGoghX + 5, vanGoghY + 5, 75, 95);
+                
+                ctx.fillStyle = '#F4D03F';
+                ctx.fillRect(vanGoghX + 10, vanGoghY + 10, 65, 85);
+                
+                ctx.fillStyle = '#8B6914';
+                ctx.fillRect(vanGoghX + 30, vanGoghY + 60, 25, 30);
+                ctx.fillRect(vanGoghX + 32, vanGoghY + 55, 21, 5);
+                ctx.fillStyle = '#6B5410';
+                ctx.fillRect(vanGoghX + 31, vanGoghY + 65, 3, 20);
+                
+                let sunflower1X = vanGoghX + 25;
+                let sunflower1Y = vanGoghY + 25;
+                ctx.fillStyle = '#F39C12';
+                for(let i = 0; i < 8; i++) {
+                    let angle = (i * Math.PI) / 4;
+                    let px = sunflower1X + Math.cos(angle) * 8;
+                    let py = sunflower1Y + Math.sin(angle) * 8;
+                    ctx.fillRect(px, py, 5, 5);
+                }
+                ctx.fillStyle = '#DC7633';
+                ctx.fillRect(sunflower1X, sunflower1Y, 6, 6);
+                ctx.fillStyle = '#27AE60';
+                ctx.fillRect(sunflower1X + 2, sunflower1Y + 6, 2, 30);
+                
+                let sunflower2X = vanGoghX + 42;
+                let sunflower2Y = vanGoghY + 20;
+                ctx.fillStyle = '#F1C40F';
+                for(let i = 0; i < 8; i++) {
+                    let angle = (i * Math.PI) / 4;
+                    let px = sunflower2X + Math.cos(angle) * 10;
+                    let py = sunflower2Y + Math.sin(angle) * 10;
+                    ctx.fillRect(px, py, 6, 6);
+                }
+                ctx.fillStyle = '#D68910';
+                ctx.fillRect(sunflower2X - 1, sunflower2Y - 1, 8, 8);
+                ctx.fillStyle = '#229954';
+                ctx.fillRect(sunflower2X + 2, sunflower2Y + 7, 3, 35);
+                ctx.fillStyle = '#27AE60';
+                ctx.fillRect(sunflower2X + 6, sunflower2Y + 20, 8, 4);
+                
+                let sunflower3X = vanGoghX + 58;
+                let sunflower3Y = vanGoghY + 30;
+                ctx.fillStyle = '#F39C12';
+                for(let i = 0; i < 8; i++) {
+                    let angle = (i * Math.PI) / 4;
+                    let px = sunflower3X + Math.cos(angle) * 7;
+                    let py = sunflower3Y + Math.sin(angle) * 7;
+                    ctx.fillRect(px, py, 4, 4);
+                }
+                ctx.fillStyle = '#CA6F1E';
+                ctx.fillRect(sunflower3X, sunflower3Y, 5, 5);
+                ctx.fillStyle = '#27AE60';
+                ctx.fillRect(sunflower3X + 1, sunflower3Y + 5, 2, 27);
+                
+                ctx.fillStyle = '#1B4F72';
+                ctx.font = 'italic bold 8px serif';
+                ctx.fillText('VG', vanGoghX + 60, vanGoghY + 92);
+                
+                let selfPortraitX = 900 - (camera.x * 0.35);
+                let selfPortraitY = 65;
+                
+                ctx.fillStyle = '#DAA520';
+                ctx.fillRect(selfPortraitX, selfPortraitY, 75, 95);
+                ctx.fillStyle = '#B8860B';
+                ctx.fillRect(selfPortraitX + 4, selfPortraitY + 4, 67, 87);
+                
+                ctx.fillStyle = '#2C7A7B';
+                ctx.fillRect(selfPortraitX + 8, selfPortraitY + 8, 59, 79);
+                
+                ctx.fillStyle = '#D4A574';
+                ctx.fillRect(selfPortraitX + 28, selfPortraitY + 28, 24, 28);
+                ctx.fillRect(selfPortraitX + 26, selfPortraitY + 32, 28, 20);
+                
+                ctx.fillStyle = '#DC7633';
+                ctx.fillRect(selfPortraitX + 20, selfPortraitY + 20, 36, 12);
+                ctx.fillRect(selfPortraitX + 18, selfPortraitY + 28, 10, 8);
+                ctx.fillRect(selfPortraitX + 52, selfPortraitY + 28, 10, 8);
+                ctx.fillRect(selfPortraitX + 26, selfPortraitY + 50, 28, 8);
+                ctx.fillRect(selfPortraitX + 28, selfPortraitY + 56, 24, 6);
+                
+                ctx.fillStyle = '#3498DB';
+                ctx.fillRect(selfPortraitX + 32, selfPortraitY + 38, 4, 3);
+                ctx.fillRect(selfPortraitX + 44, selfPortraitY + 38, 4, 3);
+                
+                ctx.fillStyle = '#A0522D';
+                ctx.fillRect(selfPortraitX + 30, selfPortraitY + 36, 6, 1);
+                ctx.fillRect(selfPortraitX + 44, selfPortraitY + 36, 6, 1);
+                
+                ctx.fillStyle = '#C19A6B';
+                ctx.fillRect(selfPortraitX + 38, selfPortraitY + 42, 4, 6);
+                
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(selfPortraitX + 36, selfPortraitY + 50, 8, 2);
+                
+                ctx.fillStyle = '#27AE60';
+                ctx.fillRect(selfPortraitX + 22, selfPortraitY + 58, 36, 25);
+                
+                ctx.fillStyle = '#1E8449';
+                ctx.fillRect(selfPortraitX + 32, selfPortraitY + 58, 6, 8);
+                ctx.fillRect(selfPortraitX + 42, selfPortraitY + 58, 6, 8);
+                
+                ctx.fillStyle = '#A0522D';
+                ctx.fillRect(selfPortraitX + 30, selfPortraitY + 44, 1, 4);
+                ctx.fillRect(selfPortraitX + 49, selfPortraitY + 44, 1, 4);
+                
+                ctx.fillStyle = '#1B4F72';
+                ctx.font = 'italic bold 8px serif';
+                ctx.fillText('Vincent', selfPortraitX + 10, selfPortraitY + 86);
+                
+                for(let i = 0; i < 5; i++) {
+                    let x = 200 + i * 200 - (camera.x * 0.4);
+                    ctx.fillStyle = '#654321';
+                    ctx.fillRect(x, 300, 80, 60);
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(x + 3, 303, 74, 54);
+                    
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(x + 10, 360, 15, 40);
+                    ctx.fillRect(x + 55, 360, 15, 40);
+                    ctx.fillRect(x + 8, 355, 19, 8);
+                    ctx.fillRect(x + 53, 355, 19, 8);
+                    
+                    if(i % 2 === 0) {
+                        ctx.fillStyle = '#FFF';
+                        ctx.beginPath();
+                        ctx.ellipse(x + 40, 320, 15, 10, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#8B4513';
+                        ctx.fillRect(x + 33, 315, 14, 10);
+                    }
+                    ctx.fillStyle = '#4169E1';
+                    ctx.fillRect(x + 60, 310, 8, 12);
+                    ctx.fillStyle = '#87CEEB';
+                    ctx.fillRect(x + 60, 310, 8, 8);
+                }
+                
+                ctx.fillStyle = '#FFD700';
+                for(let i = 0; i < 6; i++) {
+                    let lx = 150 + i * 180 - (camera.x * 0.4);
+                    ctx.beginPath();
+                    ctx.arc(lx, 80, 18, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(lx, 80, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#8B4513';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(lx, 0);
+                    ctx.lineTo(lx, 62);
+                    ctx.stroke();
+                    ctx.fillStyle = '#FFD700';
+                }
+                
+                let shelfX = 600 - (camera.x * 0.35);
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(shelfX, 120, 100, 8);
+                ctx.fillRect(shelfX, 170, 100, 8);
+                for(let i = 0; i < 5; i++) {
+                    ctx.fillStyle = i % 2 === 0 ? '#2E7D32' : '#8B4513';
+                    ctx.fillRect(shelfX + 10 + i * 18, 95, 12, 25);
+                    ctx.fillRect(shelfX + 12 + i * 18, 92, 8, 3);
+                }
+                
+                for(let i = 0; i < 3; i++) {
+                    let px = 250 + i * 300 - (camera.x * 0.45);
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(px, canvas.height - 140, 25, 30);
+                    ctx.fillStyle = '#27AE60';
+                    ctx.fillRect(px + 8, canvas.height - 160, 3, 20);
+                    ctx.fillRect(px + 5, canvas.height - 165, 15, 3);
+                    ctx.fillRect(px + 3, canvas.height - 155, 8, 3);
+                    ctx.fillRect(px + 12, canvas.height - 152, 8, 3);
+                }
+                
+            } else if(currentLevel === 4) {
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#2c2c2c');
+                gradient.addColorStop(0.5, '#1f1f1f');
+                gradient.addColorStop(1, '#1a1a1a');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.strokeStyle = '#444';
+                ctx.fillStyle = '#333';
+                ctx.lineWidth = 1;
+                for(let y = 0; y < canvas.height; y += 20) {
+                    for(let x = 0; x < canvas.width + 200; x += 40) {
+                        let bx = x - (camera.x * 0.2) % 40;
+                        ctx.fillRect(bx, y, 40, 20);
+                        ctx.strokeRect(bx, y, 40, 20);
+                        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                        ctx.fillRect(bx + 2, y + 2, 3, 3);
+                        ctx.fillStyle = '#333';
+                    }
+                }
+                
+                ctx.fillStyle = '#555';
+                for(let i = 0; i < 20; i++) {
+                    let px = i * 150 - (camera.x * 0.25);
+                    ctx.fillRect(px, 10, 8, canvas.height - 200);
+                    ctx.fillStyle = '#666';
+                    ctx.fillRect(px + 1, 10, 6, canvas.height - 200);
+                    ctx.fillStyle = '#555';
+                    for(let j = 0; j < 5; j++) {
+                        ctx.fillRect(px - 3, 50 + j * 100, 14, 6);
+                    }
+                }
+                
+                const graffiti = [
+                    {x: 200, y: 150, color: '#E74C3C', text: 'BIKE'},
+                    {x: 500, y: 180, color: '#3498DB', text: 'NL'},
+                    {x: 850, y: 160, color: '#2ECC71', text: 'AMS'},
+                    {x: 1200, y: 170, color: '#F39C12', text: '020'}
+                ];
+                
+                graffiti.forEach(g => {
+                    let gx = g.x - (camera.x * 0.3);
+                    ctx.fillStyle = g.color;
+                    ctx.font = 'bold 30px Arial';
+                    ctx.fillText(g.text, gx, g.y);
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillText(g.text, gx + 2, g.y + 2);
+                });
+                
+                const signs = [{x: 350, icon: '→'}, {x: 700, icon: '🚲'}, {x: 1050, icon: '⚠️'}];
+                signs.forEach(sign => {
+                    let sx = sign.x - (camera.x * 0.35);
+                    ctx.fillStyle = '#F39C12';
+                    ctx.fillRect(sx, 80, 60, 50);
+                    ctx.fillStyle = '#E67E22';
+                    ctx.fillRect(sx + 3, 83, 54, 44);
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 30px Arial';
+                    ctx.fillText(sign.icon, sx + 15, 115);
+                });
+                
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 2;
+                for(let i = 0; i < 30; i++) {
+                    let cx = i * 100 - (camera.x * 0.4);
+                    ctx.beginPath();
+                    ctx.moveTo(cx, 20);
+                    ctx.bezierCurveTo(cx + 20, 40, cx + 30, 35, cx + 50, 20);
+                    ctx.stroke();
+                }
+                
+                for(let i = 0; i < 15; i++) {
+                    let lx = i * 100 - (camera.x * 0.3);
+                    ctx.fillStyle = '#7F8C8D';
+                    ctx.fillRect(lx - 15, 35, 30, 10);
+                    ctx.fillRect(lx - 10, 45, 20, 5);
+                    
+                    ctx.fillStyle = 'rgba(255, 200, 100, 0.7)';
+                    ctx.beginPath();
+                    ctx.arc(lx, 50, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    let lampGradient = ctx.createRadialGradient(lx, 50, 20, lx, 200, 100);
+                    lampGradient.addColorStop(0, 'rgba(255, 200, 100, 0.3)');
+                    lampGradient.addColorStop(1, 'rgba(255, 200, 100, 0)');
+                    ctx.fillStyle = lampGradient;
+                    ctx.fillRect(lx - 50, 50, 100, 150);
+                }
+                
+                ctx.strokeStyle = '#0a0a0a';
+                ctx.lineWidth = 2;
+                for(let i = 0; i < 20; i++) {
+                    let crackX = i * 130 - (camera.x * 0.5);
+                    ctx.beginPath();
+                    ctx.moveTo(crackX, canvas.height - 120);
+                    ctx.lineTo(crackX + 30, canvas.height - 80);
+                    ctx.lineTo(crackX + 50, canvas.height - 60);
+                    ctx.stroke();
+                }
+                
+            } else if(currentLevel === 5) {
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#87CEEB');
+                gradient.addColorStop(0.4, '#A8D8EA');
+                gradient.addColorStop(0.7, '#B0E0E6');
+                gradient.addColorStop(1, '#7CB342');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(150 - (camera.x * 0.05), 80, 40, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#FFA500';
+                ctx.lineWidth = 3;
+                for(let i = 0; i < 12; i++) {
+                    let angle = (Math.PI * 2 / 12) * i + Date.now() / 2000;
+                    let x1 = 150 - (camera.x * 0.05) + Math.cos(angle) * 50;
+                    let y1 = 80 + Math.sin(angle) * 50;
+                    let x2 = 150 - (camera.x * 0.05) + Math.cos(angle) * 70;
+                    let y2 = 80 + Math.sin(angle) * 70;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                }
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                for(let i = 0; i < 8; i++) {
+                    let x = i * 250 - (camera.x * 0.1);
+                    ctx.beginPath();
+                    ctx.arc(x, 80 + Math.sin(i) * 30, 40, 0, Math.PI * 2);
+                    ctx.arc(x + 30, 70 + Math.sin(i) * 30, 50, 0, Math.PI * 2);
+                    ctx.arc(x + 60, 80 + Math.sin(i) * 30, 40, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.fillStyle = '#4A7C59';
+                ctx.beginPath();
+                ctx.moveTo(-100 - (camera.x * 0.15), canvas.height - 250);
+                ctx.lineTo(150 - (camera.x * 0.15), canvas.height - 400);
+                ctx.lineTo(400 - (camera.x * 0.15), canvas.height - 250);
+                ctx.lineTo(-100 - (camera.x * 0.15), canvas.height - 250);
+                ctx.fill();
+                
+                ctx.fillStyle = '#5A8C69';
+                ctx.beginPath();
+                ctx.moveTo(300 - (camera.x * 0.12), canvas.height - 250);
+                ctx.lineTo(550 - (camera.x * 0.12), canvas.height - 380);
+                ctx.lineTo(800 - (camera.x * 0.12), canvas.height - 250);
+                ctx.lineTo(300 - (camera.x * 0.12), canvas.height - 250);
+                ctx.fill();
+                
+                ctx.fillStyle = '#8BC34A';
+                ctx.fillRect(0 - camera.x * 0.4, canvas.height - 170, 5000, 30);
+                ctx.fillStyle = '#9CCC65';
+                ctx.fillRect(0 - camera.x * 0.5, canvas.height - 140, 5000, 30);
+                
+                ctx.fillStyle = '#689F38';
+                for(let i = 0; i < 100; i++) {
+                    let gx = i * 50 - (camera.x * 0.5);
+                    ctx.fillRect(gx, canvas.height - 160, 3, 10);
+                    ctx.fillRect(gx + 5, canvas.height - 155, 3, 8);
+                    ctx.fillRect(gx + 10, canvas.height - 158, 3, 9);
+                }
+                
+                const wildFlowers = ['#FF69B4', '#FFD700', '#FF6347', '#9370DB', '#FF8C00'];
+                for(let i = 0; i < 40; i++) {
+                    let fx = 120 + i * 120 - (camera.x * 0.5);
+                    let fy = canvas.height - 160 + Math.sin(i) * 10;
+                    ctx.fillStyle = '#2E7D32';
+                    ctx.fillRect(fx, fy, 2, 12);
+                    ctx.fillStyle = wildFlowers[i % wildFlowers.length];
+                    ctx.beginPath();
+                    ctx.arc(fx + 1, fy - 2, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.fillStyle = '#8D6E63';
+                for(let i = 0; i < 20; i++) {
+                    let fenceX = 200 + i * 80 - (camera.x * 0.4);
+                    let fenceY = canvas.height - 200;
+                    ctx.fillRect(fenceX, fenceY, 4, 50);
+                    ctx.fillRect(fenceX - 10, fenceY + 10, 24, 3);
+                    ctx.fillRect(fenceX - 10, fenceY + 25, 24, 3);
+                }
+                
+                let houseX = 500 - (camera.x * 0.25);
+                let houseY = canvas.height - 280;
+                ctx.fillStyle = '#D32F2F';
+                ctx.fillRect(houseX, houseY, 80, 60);
+                ctx.fillStyle = '#5D4037';
+                ctx.beginPath();
+                ctx.moveTo(houseX - 10, houseY);
+                ctx.lineTo(houseX + 40, houseY - 30);
+                ctx.lineTo(houseX + 90, houseY);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#4E342E';
+                ctx.fillRect(houseX + 30, houseY + 25, 20, 35);
+                ctx.fillStyle = '#FFEB3B';
+                ctx.fillRect(houseX + 10, houseY + 15, 15, 15);
+                ctx.fillRect(houseX + 55, houseY + 15, 15, 15);
+                ctx.strokeStyle = '#FFF';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(houseX + 10, houseY + 15, 15, 15);
+                ctx.strokeRect(houseX + 55, houseY + 15, 15, 15);
+                
+                ctx.save();
+                let windmillX = 800 - (camera.x * 0.2);
+                let windmillY = 200;
+                
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(windmillX, windmillY, 30, 100);
+                
+                ctx.translate(windmillX + 15, windmillY + 20);
+                ctx.rotate(Date.now() / 1000);
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(-60, -5, 120, 10);
+                ctx.fillRect(-5, -60, 10, 120);
+                ctx.restore();
+                
+                for(let w = 0; w < 3; w++) {
+                    ctx.save();
+                    let windmillX = 600 + w * 500 - (camera.x * 0.15);
+                    let windmillY = 180;
+                    
+                    ctx.fillStyle = '#ECF0F1';
+                    ctx.beginPath();
+                    ctx.moveTo(windmillX, windmillY + 120);
+                    ctx.lineTo(windmillX - 20, windmillY);
+                    ctx.lineTo(windmillX + 20, windmillY);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#34495E';
+                    ctx.fillRect(windmillX - 8, windmillY + 60, 16, 20);
+                    
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(windmillX - 10, windmillY + 100, 20, 20);
+                    
+                    ctx.translate(windmillX, windmillY);
+                    ctx.rotate(Date.now() / 1000 + w);
+                    ctx.fillStyle = '#95A5A6';
+                    for(let s = 0; s < 4; s++) {
+                        ctx.save();
+                        ctx.rotate((Math.PI / 2) * s);
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(-8, -50);
+                        ctx.lineTo(8, -50);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                    ctx.fillStyle = '#7F8C8D';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+                
+                for(let i = 0; i < 6; i++) {
+                    let x = 300 + i * 200 - (camera.x * 0.3);
+                    let y = canvas.height - 100 + Math.sin(i) * 20;
+                    
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(x, y, 40, 25);
+                    
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(x + 2, y + 2, 15, 12);
+                    ctx.fillRect(x + 25, y + 8, 12, 15);
+                    ctx.fillRect(x + 10, y + 18, 8, 5);
+                    
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(x - 12, y + 5, 18, 18);
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(x - 10, y + 7, 8, 8);
+                    
+                    ctx.fillStyle = '#FFB6C1';
+                    ctx.fillRect(x - 12, y + 18, 6, 4);
+                    
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(x - 11, y + 19, 2, 2);
+                    ctx.fillRect(x - 8, y + 19, 2, 2);
+                    
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(x - 8, y + 10, 4, 4);
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(x - 7, y + 11, 2, 2);
+                    
+                    ctx.fillStyle = '#FFB6C1';
+                    ctx.fillRect(x - 2, y + 5, 3, 5);
+                    ctx.fillRect(x + 4, y + 5, 3, 5);
+                    
+                    ctx.fillStyle = '#F5DEB3';
+                    ctx.fillRect(x - 1, y + 2, 2, 4);
+                    ctx.fillRect(x + 5, y + 2, 2, 4);
+                    ctx.fillRect(x - 2, y + 1, 2, 2);
+                    ctx.fillRect(x + 6, y + 1, 2, 2);
+                    
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(x + 5, y + 25, 6, 15);
+                    ctx.fillRect(x + 15, y + 25, 6, 15);
+                    ctx.fillRect(x + 24, y + 25, 6, 15);
+                    ctx.fillRect(x + 34, y + 25, 6, 15);
+                    
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(x + 5, y + 38, 6, 2);
+                    ctx.fillRect(x + 15, y + 38, 6, 2);
+                    ctx.fillRect(x + 24, y + 38, 6, 2);
+                    ctx.fillRect(x + 34, y + 38, 6, 2);
+                    
+                    ctx.strokeStyle = '#8B4513';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x + 40, y + 10);
+                    ctx.lineTo(x + 48, y + 20);
+                    ctx.stroke();
+                    ctx.fillStyle = '#654321';
+                    ctx.fillRect(x + 47, y + 20, 3, 4);
+                }
+                
+            } else if(currentLevel === 6) {
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#0a0a1a');
+                gradient.addColorStop(0.5, '#1a1a2e');
+                gradient.addColorStop(1, '#2a2a3e');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#FFF';
+                for(let i = 0; i < 50; i++) {
+                    let sx = (i * 237) % (canvas.width + 500) - (camera.x * 0.05);
+                    let sy = (i * 149) % 200;
+                    let starSize = (i % 3) + 1;
+                    ctx.fillRect(sx, sy, starSize, starSize);
+                }
+                
+                ctx.fillStyle = '#F0E68C';
+                ctx.beginPath();
+                ctx.arc(canvas.width - 150, 100, 35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#E6DC7A';
+                ctx.fillRect(canvas.width - 160, 95, 8, 8);
+                ctx.fillRect(canvas.width - 145, 110, 6, 6);
+                
+                const buildingColors = ['#0f0f1e', '#1a1a2e', '#252535'];
+                for(let i = 0; i < 12; i++) {
+                    let x = i * 140 - (camera.x * 0.2);
+                    let height = 200 + Math.sin(i * 1.3) * 100;
+                    ctx.fillStyle = buildingColors[i % 3];
+                    ctx.fillRect(x, canvas.height - height - 50, 120, height);
+                    
+                    ctx.fillStyle = '#ff6b6b';
+                    ctx.fillRect(x + 55, canvas.height - height - 70, 3, 20);
+                    ctx.beginPath();
+                    ctx.arc(x + 56.5, canvas.height - height - 70, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    for(let j = 0; j < Math.floor(height / 28); j++) {
+                        for(let k = 0; k < 3; k++) {
+                            if(Math.random() > 0.3) {
+                                ctx.fillStyle = j % 2 === 0 ? '#FFD700' : '#4ECDC4';
+                                ctx.fillRect(x + 15 + k * 35, canvas.height - height - 35 + j * 28, 18, 22);
+                            }
+                        }
+                    }
+                }
+                
+                const neonTexts = ['GAME', 'PLAY', 'FUN', 'RETRO', 'ARCADE'];
+                const neonColors = ['#ff6b6b', '#4ECDC4', '#FFD93D', '#F38181', '#A8E6CF'];
+                
+                for(let i = 0; i < 8; i++) {
+                    let x = i * 200 - (camera.x * 0.3);
+                    let y = 120 + (i % 3) * 60;
+                    
+                    ctx.shadowBlur = 25;
+                    ctx.shadowColor = neonColors[i % neonColors.length];
+                    ctx.strokeStyle = neonColors[i % neonColors.length];
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(x, y, 100, 50);
+                    
+                    ctx.fillStyle = neonColors[i % neonColors.length];
+                    ctx.font = 'bold 14px Courier';
+                    ctx.fillText(neonTexts[i % neonTexts.length], x + 15, y + 30);
+                }
+                ctx.shadowBlur = 0;
+                
+                for(let i = 0; i < 15; i++) {
+                    let lx = i * 150 - (camera.x * 0.4);
+                    ctx.strokeStyle = i % 2 === 0 ? '#ff6b6b' : '#4ECDC4';
+                    ctx.lineWidth = 3;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = ctx.strokeStyle;
+                    ctx.beginPath();
+                    ctx.moveTo(lx, canvas.height - 180);
+                    ctx.lineTo(lx, canvas.height - 50);
+                    ctx.stroke();
+                }
+                ctx.shadowBlur = 0;
+                
+                ctx.fillStyle = 'rgba(138, 43, 226, 0.1)';
+                ctx.fillRect(0, canvas.height - 150, canvas.width, 150);
+            }
+        }
+        
+        function gameLoop() {
+            if(!gameStarted) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawBackground();
+            
+            if(currentLevel === 1) drawRain();
+            
+            drawPlatforms();
+            drawObstacles();
+            drawNPCs();
+            drawCoins();
+            drawCheckpoints();
+            updatePlayer();
+            drawPlayer();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+        
+        window.addEventListener('keyup', e => {
+            keys[e.key] = false;
+        });
+        
+        document.getElementById('leftBtn').addEventListener('touchstart', () => touchLeft = true);
+        document.getElementById('leftBtn').addEventListener('touchend', () => touchLeft = false);
+        document.getElementById('rightBtn').addEventListener('touchstart', () => touchRight = true);
+        document.getElementById('rightBtn').addEventListener('touchend', () => touchRight = false);
+        document.getElementById('jumpBtn').addEventListener('touchstart', () => touchJump = true);
+        document.getElementById('jumpBtn').addEventListener('touchend', () => touchJump = false);
+        
+        document.getElementById('startBtn').addEventListener('click', () => {
+            document.getElementById('startScreen').style.display = 'none';
+            gameStarted = true;
+            generateLevel(1);
+            updateHUD();
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
